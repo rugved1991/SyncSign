@@ -40,6 +40,14 @@ export async function createDriveFolder(restaurantName) {
 }
 
 /**
+ * Store a folder selected via the Picker (or any other means).
+ */
+export function setStoredFolder(folderId, folderName) {
+  localStorage.setItem(FOLDER_KEY, folderId)
+  localStorage.setItem(RESTAURANT_KEY, folderName)
+}
+
+/**
  * Get the stored folder ID, or null if not set up yet.
  */
 export function getStoredFolderId() {
@@ -52,17 +60,12 @@ export function getStoredRestaurantName() {
 
 /**
  * Upload an image file to the SyncSign Drive folder.
- * Returns { id, url } where url is the public thumbnail URL.
+ * Returns { id, url, thumbnailUrl }.
  */
 export async function uploadImageToDrive(file, folderId) {
   const token = getToken()
 
-  // Multipart upload: metadata + file data
-  const metadata = {
-    name: file.name,
-    parents: [folderId],
-  }
-
+  const metadata = { name: file.name, parents: [folderId] }
   const form = new FormData()
   form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }))
   form.append('file', file)
@@ -75,7 +78,6 @@ export async function uploadImageToDrive(file, folderId) {
   if (!res.ok) throw new Error(`Drive upload failed: ${res.status}`)
   const data = await res.json()
 
-  // Make the file publicly readable so TVs can fetch it without auth
   await setPublicReadable(data.id, token)
 
   return {
@@ -86,16 +88,10 @@ export async function uploadImageToDrive(file, folderId) {
   }
 }
 
-/**
- * Set a Drive file to public readable (anyone with link can view).
- */
 async function setPublicReadable(fileId, token) {
   const res = await fetch(`${DRIVE_API}/files/${fileId}/permissions`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'anyone', role: 'reader' }),
   })
   if (!res.ok) throw new Error(`Drive permission set failed: ${res.status}`)
@@ -103,7 +99,7 @@ async function setPublicReadable(fileId, token) {
 
 /**
  * List all images in the SyncSign folder.
- * Returns array of { id, name, url }.
+ * Returns array of { id, name, url, thumbnailUrl }.
  */
 export async function listDriveImages(folderId) {
   const token = getToken()
@@ -138,47 +134,65 @@ export async function deleteDriveFile(fileId) {
 
 /**
  * Public URL for a Drive image — used by TVs to fetch without auth.
+ * lh3 is Google's image CDN; not subject to the /uc?export=view deprecation.
  */
 export function driveImageUrl(fileId) {
-  // lh3 is Google's image CDN — publicly accessible for files with 'anyone reader'
-  // permission, and not subject to the deprecation of the /uc?export=view endpoint.
   return `https://lh3.googleusercontent.com/d/${fileId}`
 }
 
-/**
- * Parse a folder ID from a Google Drive folder URL or raw ID.
- * Handles:
- *   https://drive.google.com/drive/folders/FOLDER_ID
- *   https://drive.google.com/drive/u/0/folders/FOLDER_ID
- *   FOLDER_ID (raw)
- */
-export function parseFolderIdFromUrl(input) {
-  const trimmed = input.trim()
-  const match = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/)
-  return match ? match[1] : trimmed
+// ── Google Picker API ─────────────────────────────────────────────
+let gapiReady = false
+let pickerReady = false
+
+function loadGapiScript() {
+  return new Promise((resolve) => {
+    if (window.gapi) { gapiReady = true; return resolve() }
+    const existing = document.querySelector('script[src="https://apis.google.com/js/api.js"]')
+    if (existing) {
+      existing.addEventListener('load', () => { gapiReady = true; resolve() })
+      return
+    }
+    const script = document.createElement('script')
+    script.src = 'https://apis.google.com/js/api.js'
+    script.onload = () => { gapiReady = true; resolve() }
+    document.head.appendChild(script)
+  })
+}
+
+function loadPickerModule() {
+  return new Promise((resolve) => {
+    if (pickerReady) return resolve()
+    window.gapi.load('picker', () => { pickerReady = true; resolve() })
+  })
 }
 
 /**
- * Validate that a folder ID exists and is accessible.
- * Returns { id, name } on success, throws on failure.
- * Requires drive.readonly scope if the folder was not created by this app.
+ * Open the Google Picker filtered to folders only.
+ * Calls onPicked({ id, name }) when the user selects a folder.
+ * Requires drive.readonly scope so the user can browse all their folders.
+ *
+ * @param {string} accessToken - OAuth access token (from sessionStorage)
+ * @param {string} apiKey - VITE_GOOGLE_PICKER_API_KEY
+ * @param {function} onPicked - called with { id, name }
  */
-export async function validateFolder(folderId) {
-  const token = getToken()
-  const res = await fetch(
-    `${DRIVE_API}/files/${folderId}?fields=id,name,mimeType`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  )
-  if (!res.ok) throw new Error('Folder not found or not accessible')
-  const data = await res.json()
-  if (data.mimeType !== 'application/vnd.google-apps.folder') throw new Error('That link is not a folder')
-  return data
-}
+export async function openFolderPicker(accessToken, apiKey, onPicked) {
+  await loadGapiScript()
+  await loadPickerModule()
 
-/**
- * Store an externally-selected folder (not created by this app).
- */
-export function storeExistingFolder(folderId, folderName) {
-  localStorage.setItem(FOLDER_KEY, folderId)
-  localStorage.setItem(RESTAURANT_KEY, folderName)
+  const view = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS)
+    .setSelectFolderEnabled(true)
+    .setMimeTypes('application/vnd.google-apps.folder')
+
+  new window.google.picker.PickerBuilder()
+    .addView(view)
+    .setOAuthToken(accessToken)
+    .setDeveloperKey(apiKey)
+    .setCallback((data) => {
+      if (data.action === window.google.picker.Action.PICKED) {
+        const doc = data.docs[0]
+        onPicked({ id: doc.id, name: doc.name })
+      }
+    })
+    .build()
+    .setVisible(true)
 }

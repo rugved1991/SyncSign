@@ -9,12 +9,11 @@ import {
   createDriveFolder,
   getStoredFolderId,
   getStoredRestaurantName,
+  setStoredFolder,
   uploadImageToDrive,
   listDriveImages,
   deleteDriveFile,
-  parseFolderIdFromUrl,
-  validateFolder,
-  storeExistingFolder,
+  openFolderPicker,
 } from '@shared/drive.js'
 import { broadcastState } from '@shared/broadcast.js'
 import { ref as dbRef, onDisconnect } from 'firebase/database'
@@ -99,39 +98,40 @@ document.getElementById('input-restaurant-name').addEventListener('keydown', (e)
   if (e.key === 'Enter') document.getElementById('btn-setup').click()
 })
 
-// ── Use existing Drive folder ─────────────────────────────────────
-document.getElementById('btn-use-existing').addEventListener('click', async () => {
-  const raw = document.getElementById('input-folder-url').value.trim()
-  if (!raw) return
-
-  const btn = document.getElementById('btn-use-existing')
-  const errEl = document.getElementById('setup-error')
+// ── Change folder (Picker) ────────────────────────────────────────
+document.getElementById('btn-change-folder').addEventListener('click', async () => {
+  const apiKey = import.meta.env.VITE_GOOGLE_PICKER_API_KEY
+  const btn = document.getElementById('btn-change-folder')
   btn.disabled = true
-  btn.textContent = 'Connecting…'
-  errEl.classList.add('hidden')
 
   try {
-    const folderId = parseFolderIdFromUrl(raw)
+    // Request drive.readonly so the picker can browse all folders
+    const accessToken = await requestAdditionalScope(
+      'https://www.googleapis.com/auth/drive.readonly'
+    )
 
-    // Need drive.readonly to access folders not created by this app
-    await requestAdditionalScope('https://www.googleapis.com/auth/drive.readonly')
+    openFolderPicker(accessToken, apiKey, async ({ id, name }) => {
+      setStoredFolder(id, name)
+      document.getElementById('header-restaurant-name').textContent = name
 
-    const folder = await validateFolder(folderId)
-    storeExistingFolder(folder.id, folder.name)
-    loadMainScreen()
+      // Reload playlist from newly selected folder
+      playlist = []
+      renderPlaylist()
+      try {
+        const images = await listDriveImages(id)
+        playlist = images.map(img => ({ id: img.id, url: img.url, thumbnailUrl: img.thumbnailUrl || img.url }))
+        renderPlaylist()
+        showToast(`Switched to "${name}"`)
+      } catch (err) {
+        console.warn('Could not load images from new folder:', err)
+      }
+    })
   } catch (err) {
-    console.error('Existing folder error:', err)
-    errEl.textContent = err.message.includes('not found')
-      ? 'Folder not found. Make sure the link is correct and the folder is not restricted.'
-      : `Could not connect: ${err.message}`
-    errEl.classList.remove('hidden')
+    console.error('Picker error:', err)
+    showToast('Could not open folder picker.')
+  } finally {
     btn.disabled = false
-    btn.textContent = 'Use this folder →'
   }
-})
-
-document.getElementById('input-folder-url').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') document.getElementById('btn-use-existing').click()
 })
 
 // ── Main screen load ──────────────────────────────────────────────

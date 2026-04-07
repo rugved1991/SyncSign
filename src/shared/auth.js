@@ -1,169 +1,96 @@
 /**
- * Google Identity Services (GSI) auth helpers.
- * Scopes: openid, email, drive.file
- * Tokens stored in sessionStorage only — never transmitted to any server.
+ * Auth — OAuth 2.0 implicit grant redirect flow.
+ *
+ * Why redirect instead of popup:
+ *   Mobile browsers (Safari iOS, Chrome Android) block popups that aren't
+ *   opened synchronously from a user gesture. GSI's One Tap and
+ *   tokenClient.requestAccessToken() both open popups asynchronously,
+ *   so they silently fail on mobile. A full-page redirect to Google's
+ *   OAuth endpoint works on every browser, every device.
+ *
+ * Flow:
+ *   1. User taps "Sign in" → initiateOAuthRedirect() navigates to Google
+ *   2. Google redirects back to /controller#access_token=TOKEN&...
+ *   3. checkOAuthReturn() parses the hash, returns the token
+ *   4. fetchUserInfo() gets uid/email/name from Google's userinfo endpoint
+ *   5. storeSession() persists to sessionStorage
  */
 
 const TOKEN_KEY = 'syncsign_access_token'
-const UID_KEY = 'syncsign_uid'
+const UID_KEY   = 'syncsign_uid'
 const EMAIL_KEY = 'syncsign_email'
-const NAME_KEY = 'syncsign_name'
+const NAME_KEY  = 'syncsign_name'
 
+// Include drive.readonly upfront so the Picker can browse all folders
+// without needing a second OAuth round-trip.
 const SCOPES = [
   'openid',
   'email',
   'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/drive.readonly',
 ].join(' ')
 
-let tokenClient = null
-let tokenClientId = null
-
 /**
- * Load the GSI script dynamically.
+ * Redirect the browser to Google's OAuth consent screen.
+ * Stores any pending ?pair= value so it survives the redirect.
  */
-function loadGSIScript() {
-  return new Promise((resolve, reject) => {
-    if (window.google?.accounts) return resolve()
-    const script = document.createElement('script')
-    script.src = 'https://accounts.google.com/gsi/client'
-    script.async = true
-    script.defer = true
-    script.onload = resolve
-    script.onerror = reject
-    document.head.appendChild(script)
-  })
-}
+export function initiateOAuthRedirect(clientId) {
+  // Preserve pending pairing ID through the redirect
+  const pendingPair = new URLSearchParams(window.location.search).get('pair')
+  if (pendingPair) sessionStorage.setItem('syncsign_pending_pair', pendingPair)
 
-/**
- * Initialize the OAuth token client (for Drive access token).
- * Must be called after GSI script loads.
- */
-function initTokenClient(clientId, callback) {
-  tokenClientId = clientId
-  tokenClient = window.google.accounts.oauth2.initTokenClient({
+  const redirectUri = window.location.origin + '/controller'
+  const params = new URLSearchParams({
     client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'token',
     scope: SCOPES,
-    callback,
+    include_granted_scopes: 'true',
   })
+  window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`
 }
 
 /**
- * Request an additional OAuth scope incrementally (e.g. drive.readonly).
- * Call after the initial sign-in. Shows a consent popup only if the scope
- * hasn't been granted yet.
+ * Call once on page load. If returning from an OAuth redirect, parses the
+ * access token from the URL hash, cleans the hash, and returns the token.
+ * Returns null if this is not an OAuth return.
  */
-export async function requestAdditionalScope(scope) {
-  await loadGSIScript()
-  return new Promise((resolve, reject) => {
-    const client = window.google.accounts.oauth2.initTokenClient({
-      client_id: tokenClientId,
-      scope,
-      callback: (response) => {
-        if (response.error) return reject(new Error(response.error))
-        sessionStorage.setItem(TOKEN_KEY, response.access_token)
-        resolve(response.access_token)
-      },
-    })
-    client.requestAccessToken({ prompt: '' })
+export function checkOAuthReturn() {
+  const hash = window.location.hash.slice(1)
+  if (!hash) return null
+  const params = new URLSearchParams(hash)
+  const accessToken = params.get('access_token')
+  if (!accessToken) return null
+  // Remove the hash so refresh doesn't re-process it
+  window.history.replaceState({}, '', window.location.pathname + window.location.search)
+  return accessToken
+}
+
+/**
+ * Fetch the signed-in user's profile from Google's userinfo endpoint.
+ * Returns { sub, email, name }.
+ */
+export async function fetchUserInfo(accessToken) {
+  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
   })
+  if (!res.ok) throw new Error('Failed to fetch user info')
+  return res.json()
 }
 
 /**
- * Decode a JWT without verifying — safe because we only use the payload
- * for the UID (sub claim). Firebase verifies the token on its side.
+ * Persist session to sessionStorage.
+ * Access token is never written to localStorage or transmitted to any server.
  */
-function decodeJWT(token) {
-  const parts = token.split('.')
-  if (parts.length !== 3) throw new Error('Invalid JWT')
-  const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
-  return payload
+export function storeSession(uid, email, name, accessToken) {
+  sessionStorage.setItem(TOKEN_KEY, accessToken)
+  sessionStorage.setItem(UID_KEY, uid)
+  sessionStorage.setItem(EMAIL_KEY, email)
+  sessionStorage.setItem(NAME_KEY, name)
 }
 
 /**
- * Full sign-in flow:
- * 1. Show Google One Tap (or fallback to token client popup)
- * 2. Decode the ID token to extract uid, email, name
- * 3. Request an access token for Drive API
- * 4. Call onSuccess({ uid, email, name, idToken, accessToken })
- *
- * @param {string} clientId - Google OAuth client ID
- * @param {function} onSuccess - called with user info on success
- * @param {function} onError - called with Error on failure
- */
-export async function signIn(clientId, onSuccess, onError) {
-  try {
-    await loadGSIScript()
-
-    // Step 1: Get ID token via One Tap / popup
-    const idToken = await getIdToken(clientId)
-    const payload = decodeJWT(idToken)
-    const uid = payload.sub
-    const email = payload.email
-    const name = payload.name || email
-
-    // Step 2: Request Drive access token
-    await new Promise((resolve, reject) => {
-      initTokenClient(clientId, (response) => {
-        if (response.error) return reject(new Error(response.error))
-        sessionStorage.setItem(TOKEN_KEY, response.access_token)
-        resolve()
-      })
-      tokenClient.requestAccessToken({ prompt: '' })
-    })
-
-    // Persist session info
-    sessionStorage.setItem(UID_KEY, uid)
-    sessionStorage.setItem(EMAIL_KEY, email)
-    sessionStorage.setItem(NAME_KEY, name)
-
-    onSuccess({ uid, email, name, idToken, accessToken: sessionStorage.getItem(TOKEN_KEY) })
-  } catch (err) {
-    onError(err)
-  }
-}
-
-/**
- * Get an ID token using Google One Tap.
- * Falls back gracefully if One Tap is not available.
- */
-function getIdToken(clientId) {
-  return new Promise((resolve, reject) => {
-    window.google.accounts.id.initialize({
-      client_id: clientId,
-      callback: (response) => {
-        if (response.credential) resolve(response.credential)
-        else reject(new Error('No credential returned'))
-      },
-      auto_select: true,
-      cancel_on_tap_outside: false,
-    })
-
-    // Try One Tap first; if not shown (e.g. user dismissed before), prompt manually
-    window.google.accounts.id.prompt((notification) => {
-      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        // Render a regular sign-in button as fallback
-        renderSignInButton(clientId, resolve, reject)
-      }
-    })
-  })
-}
-
-/**
- * Render a Google Sign-In button as fallback for One Tap.
- */
-function renderSignInButton(clientId, resolve, reject) {
-  const container = document.getElementById('g_id_signin')
-  if (!container) return reject(new Error('No sign-in button container found'))
-  window.google.accounts.id.renderButton(container, {
-    theme: 'outline',
-    size: 'large',
-    width: 280,
-    text: 'sign_in_with',
-  })
-}
-
-/**
- * Check if the user has an active session (token in sessionStorage).
+ * Return the current session if one exists in sessionStorage, null otherwise.
  */
 export function getStoredSession() {
   const uid = sessionStorage.getItem(UID_KEY)
@@ -178,11 +105,8 @@ export function getStoredSession() {
 }
 
 /**
- * Sign out — clear sessionStorage.
+ * Sign out — clear all session data from sessionStorage.
  */
 export function signOut() {
-  sessionStorage.removeItem(TOKEN_KEY)
-  sessionStorage.removeItem(UID_KEY)
-  sessionStorage.removeItem(EMAIL_KEY)
-  sessionStorage.removeItem(NAME_KEY)
+  [TOKEN_KEY, UID_KEY, EMAIL_KEY, NAME_KEY].forEach(k => sessionStorage.removeItem(k))
 }

@@ -1,4 +1,10 @@
-import { signIn, getStoredSession, requestAdditionalScope } from '@shared/auth.js'
+import {
+  initiateOAuthRedirect,
+  checkOAuthReturn,
+  fetchUserInfo,
+  storeSession,
+  getStoredSession,
+} from '@shared/auth.js'
 import {
   firebaseSignInWithGoogle,
   pushRoomState,
@@ -37,31 +43,9 @@ function showScreen(id) {
 }
 
 // ── Sign-in ───────────────────────────────────────────────────────
+// Redirect flow — navigates away to Google, returns via checkOAuthReturn()
 document.getElementById('btn-signin').addEventListener('click', () => {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-  document.getElementById('btn-signin').disabled = true
-
-  signIn(
-    clientId,
-    async ({ uid, name, idToken, accessToken }) => {
-      session = { uid, name }
-      sessionStorage.setItem('syncsign_access_token', accessToken)
-
-      try {
-        await firebaseSignInWithGoogle(idToken)
-      } catch (e) {
-        // Non-fatal — Firebase write will still work if rules allow
-        console.warn('Firebase sign-in failed:', e)
-      }
-
-      onSignedIn()
-    },
-    (err) => {
-      console.error('Sign-in error:', err)
-      document.getElementById('btn-signin').disabled = false
-      showToast('Sign-in failed. Please try again.')
-    }
-  )
+  initiateOAuthRedirect(import.meta.env.VITE_GOOGLE_CLIENT_ID)
 })
 
 function onSignedIn() {
@@ -106,11 +90,7 @@ document.getElementById('btn-change-folder').addEventListener('click', async () 
   btn.disabled = true
 
   try {
-    // Request drive.readonly so the picker can browse all folders
-    const accessToken = await requestAdditionalScope(
-      'https://www.googleapis.com/auth/drive.readonly'
-    )
-
+    const accessToken = sessionStorage.getItem('syncsign_access_token')
     openFolderPicker(accessToken, apiKey, async ({ id, name }) => {
       setStoredFolder(id, name)
       document.getElementById('header-restaurant-name').textContent = name
@@ -528,7 +508,31 @@ function showToast(msg) {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────
-;(function boot() {
+;(async function boot() {
+  // ── 1. Returning from Google OAuth redirect? ──────────────────────
+  const accessToken = checkOAuthReturn()
+  if (accessToken) {
+    try {
+      const info = await fetchUserInfo(accessToken)
+      storeSession(info.sub, info.email, info.name || info.email, accessToken)
+      session = { uid: info.sub, email: info.email, name: info.name || info.email }
+      try { await firebaseSignInWithGoogle(accessToken) } catch {}
+      onSignedIn()
+    } catch (err) {
+      console.error('Sign-in completion failed:', err)
+      showScreen('screen-signin')
+    }
+
+    // Handle pairing stored before the redirect
+    const pendingPair = sessionStorage.getItem('syncsign_pending_pair')
+    if (pendingPair) {
+      sessionStorage.removeItem('syncsign_pending_pair')
+      waitForSessionThenPair(pendingPair)
+    }
+    return
+  }
+
+  // ── 2. Existing session? ──────────────────────────────────────────
   const stored = getStoredSession()
   if (stored) {
     session = stored
@@ -537,13 +541,9 @@ function showToast(msg) {
     showScreen('screen-signin')
   }
 
-  // If opened via QR scan from a display (?pair=ID), resolve the pairing
-  // once the owner is signed in. Works whether already signed in or not —
-  // onSignedIn() → loadMainScreen() will have run by then.
+  // ── 3. Opened from QR scan (?pair=ID) ────────────────────────────
   const pairingId = new URLSearchParams(window.location.search).get('pair')
-  if (pairingId) {
-    waitForSessionThenPair(pairingId)
-  }
+  if (pairingId) waitForSessionThenPair(pairingId)
 })()
 
 async function waitForSessionThenPair(pairingId) {

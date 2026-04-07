@@ -14,11 +14,11 @@ export const database = getDatabase(app)
 export const auth = getAuth(app)
 
 /**
- * Sign in to Firebase using a Google ID token (from GSI).
- * Required so the owner can write to their room.
+ * Sign in to Firebase using a Google access token (from OAuth redirect).
+ * GoogleAuthProvider.credential(null, accessToken) works without an ID token.
  */
-export async function firebaseSignInWithGoogle(idToken) {
-  const credential = GoogleAuthProvider.credential(idToken)
+export async function firebaseSignInWithGoogle(accessToken) {
+  const credential = GoogleAuthProvider.credential(null, accessToken)
   return signInWithCredential(auth, credential)
 }
 

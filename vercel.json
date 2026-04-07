@@ -1,6 +1,9 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "redirects": [
+    { "source": "/", "destination": "/controller", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/controller", "destination": "/src/controller/index.html" },
     { "source": "/controller/(.*)", "destination": "/src/controller/index.html" },

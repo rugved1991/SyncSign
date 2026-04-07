@@ -22,15 +22,15 @@ html, body {
 }
 .screen.hidden { display: none; }
 
-/* ── Room code screen ────────────────────────────────────────────── */
-.roomcode-card {
+/* ── Pairing screen ──────────────────────────────────────────────── */
+.pairing-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: clamp(16px, 3vw, 28px);
   text-align: center;
   padding: 40px 32px;
-  max-width: 480px;
+  max-width: 520px;
   width: 100%;
 }
 
@@ -38,40 +38,45 @@ html, body {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 1.5rem;
+  font-size: clamp(1.2rem, 2.5vw, 1.6rem);
   font-weight: 700;
 }
 .logo-icon { color: #6c63ff; font-size: 1.8em; }
 
-.roomcode-card h1 { font-size: 1.8rem; font-weight: 700; }
-.roomcode-card p { font-size: 1rem; color: rgba(255,255,255,0.6); line-height: 1.5; }
+.pairing-card h1 { font-size: clamp(1.4rem, 4vw, 2.2rem); font-weight: 700; }
+.pairing-card p  { font-size: clamp(0.85rem, 1.8vw, 1.1rem); color: rgba(255,255,255,0.6); line-height: 1.5; }
 
-#input-roomcode {
-  width: 100%;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 10px;
-  color: #fff;
-  font-size: 1rem;
-  padding: 16px 18px;
-  outline: none;
-  text-align: center;
+.pairing-qr {
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
 }
-#input-roomcode:focus { border-color: #6c63ff; }
+/* QR library injects canvas/img — size it relative to viewport */
+.pairing-qr canvas, .pairing-qr img {
+  width: clamp(160px, 28vmin, 280px) !important;
+  height: clamp(160px, 28vmin, 280px) !important;
+  display: block;
+}
 
-#btn-join {
+.pairing-waiting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: clamp(0.8rem, 1.5vw, 1rem);
+  color: rgba(255,255,255,0.45);
+}
+.pairing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
   background: #6c63ff;
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  padding: 16px 32px;
-  width: 100%;
-  cursor: pointer;
-  min-height: 56px;
+  animation: pulse 1.6s ease-in-out infinite;
+  flex-shrink: 0;
 }
-#btn-join:active { background: #5a52e0; }
 
 /* ── Fullscreen prompt ───────────────────────────────────────────── */
 .fs-prompt {

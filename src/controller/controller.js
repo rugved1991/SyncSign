@@ -3,6 +3,7 @@ import {
   firebaseSignInWithGoogle,
   pushRoomState,
   subscribePresenceCount,
+  resolvePairing,
   database,
 } from '@shared/firebase.js'
 import {
@@ -535,4 +536,30 @@ function showToast(msg) {
   } else {
     showScreen('screen-signin')
   }
+
+  // If opened via QR scan from a display (?pair=ID), resolve the pairing
+  // once the owner is signed in. Works whether already signed in or not —
+  // onSignedIn() → loadMainScreen() will have run by then.
+  const pairingId = new URLSearchParams(window.location.search).get('pair')
+  if (pairingId) {
+    waitForSessionThenPair(pairingId)
+  }
 })()
+
+async function waitForSessionThenPair(pairingId) {
+  // Poll until session exists (sign-in may take a moment)
+  while (!session) {
+    await new Promise(r => setTimeout(r, 300))
+  }
+  try {
+    await resolvePairing(pairingId, session.uid)
+    showToast('Screen connected!')
+    // Clean up URL so refreshing doesn't re-pair
+    const url = new URL(window.location)
+    url.searchParams.delete('pair')
+    window.history.replaceState({}, '', url)
+  } catch (err) {
+    console.error('Pairing failed:', err)
+    showToast('Could not connect screen. Try scanning again.')
+  }
+}

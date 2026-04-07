@@ -1,4 +1,12 @@
-import { firebaseSignInAnonymously, subscribeRoomState, registerPresence, getServerTimeOffset, database } from '@shared/firebase.js'
+import {
+  firebaseSignInAnonymously,
+  subscribeRoomState,
+  registerPresence,
+  getServerTimeOffset,
+  registerPairingRequest,
+  onPairingResolved,
+  database,
+} from '@shared/firebase.js'
 import { onBroadcastState } from '@shared/broadcast.js'
 import { scheduleNext } from '@shared/sync.js'
 import { ref as dbRef, onValue } from 'firebase/database'
@@ -6,6 +14,8 @@ import { ref as dbRef, onValue } from 'firebase/database'
 // ── Parse room ID from URL ────────────────────────────────────────
 const params = new URLSearchParams(window.location.search)
 let roomId = params.get('room') || ''
+
+const CONTROLLER_URL = window.location.origin + '/controller'
 
 // ── State ─────────────────────────────────────────────────────────
 let currentState = null
@@ -196,23 +206,60 @@ async function loadCachedState() {
   }
 }
 
-// ── Room ID entry screen ──────────────────────────────────────────
-function showRoomCodeScreen() {
-  show('screen-roomcode')
+// ── Pairing screen ────────────────────────────────────────────────
+async function showPairingScreen() {
+  show('screen-pairing')
 
-  document.getElementById('btn-join').addEventListener('click', () => {
-    const val = document.getElementById('input-roomcode').value.trim()
-    if (!val) return
-    roomId = val
-    // Update URL without reload
+  // Stable pairing ID for this device session
+  let pairingId = sessionStorage.getItem('syncsign_pairing_id')
+  if (!pairingId) {
+    pairingId = crypto.randomUUID()
+    sessionStorage.setItem('syncsign_pairing_id', pairingId)
+  }
+
+  // Sign in anonymously so we can read/write Firebase
+  await firebaseSignInAnonymously()
+
+  // Advertise this pairing request in Firebase
+  registerPairingRequest(pairingId)
+
+  // Generate QR code pointing to the controller with the pairing ID
+  const pairUrl = `${CONTROLLER_URL}?pair=${pairingId}`
+  await renderPairingQR(pairUrl)
+
+  // When the controller resolves the pairing, navigate to the display
+  onPairingResolved(pairingId, (resolvedRoomId) => {
+    roomId = resolvedRoomId
     const url = new URL(window.location)
     url.searchParams.set('room', roomId)
     window.history.replaceState({}, '', url)
-    startDisplay()
+    showFullscreenPrompt()
   })
+}
 
-  document.getElementById('input-roomcode').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') document.getElementById('btn-join').click()
+function renderPairingQR(text) {
+  return new Promise((resolve) => {
+    const container = document.getElementById('pairing-qr')
+    container.innerHTML = ''
+
+    function doRender() {
+      new window.QRCode(container, {
+        text,
+        width: 240,
+        height: 240,
+        colorDark: '#000',
+        colorLight: '#fff',
+        correctLevel: window.QRCode.CorrectLevel.M,
+      })
+      resolve()
+    }
+
+    if (window.QRCode) return doRender()
+    const script = document.createElement('script')
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'
+    script.onload = doRender
+    script.onerror = resolve   // silently skip — URL still readable on screen
+    document.head.appendChild(script)
   })
 }
 
@@ -286,7 +333,7 @@ async function startListening() {
 // ── Entry point ───────────────────────────────────────────────────
 function startDisplay() {
   if (!roomId) {
-    showRoomCodeScreen()
+    showPairingScreen()
     return
   }
   showFullscreenPrompt()

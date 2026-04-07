@@ -76,3 +76,39 @@ export async function getServerTimeOffset() {
     onValue(offsetRef, (snap) => resolve(snap.val() || 0), { onlyOnce: true })
   })
 }
+
+// ── Pairing ───────────────────────────────────────────────────────
+
+/**
+ * Write a pairing request from the display. The display advertises its
+ * pairingId; the controller reads it and writes back the roomId.
+ * Auto-removed on disconnect.
+ */
+export function registerPairingRequest(pairingId) {
+  const pairRef = ref(database, `pairing/${pairingId}`)
+  set(pairRef, { waiting: true, createdAt: Date.now() })
+  onDisconnect(pairRef).remove()
+}
+
+/**
+ * Listen for a roomId to be written to pairing/{pairingId}.
+ * Calls callback(roomId) once when the controller pairs it.
+ * Returns unsubscribe function.
+ */
+export function onPairingResolved(pairingId, callback) {
+  const pairRef = ref(database, `pairing/${pairingId}`)
+  return onValue(pairRef, (snap) => {
+    const data = snap.val()
+    if (data && data.roomId) callback(data.roomId)
+  })
+}
+
+/**
+ * Controller calls this to pair a display — writes the roomId to
+ * pairing/{pairingId}, then removes it after 10s.
+ */
+export async function resolvePairing(pairingId, roomId) {
+  const pairRef = ref(database, `pairing/${pairingId}`)
+  await set(pairRef, { roomId, resolvedAt: Date.now() })
+  setTimeout(() => set(pairRef, null), 10_000)
+}

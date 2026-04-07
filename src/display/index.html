@@ -9,24 +9,20 @@
 </head>
 <body>
 
-<!-- ── Room code entry ────────────────────────────────────────────── -->
-<div id="screen-roomcode" class="screen hidden">
-  <div class="roomcode-card">
+<!-- ── Pairing screen ─────────────────────────────────────────────── -->
+<div id="screen-pairing" class="screen hidden">
+  <div class="pairing-card">
     <div class="logo">
       <span class="logo-icon">◈</span>
       <span>SyncSign</span>
     </div>
-    <h1>Enter your room code</h1>
-    <p>Ask your manager for the room code, or scan the QR code from the controller app.</p>
-    <input
-      type="text"
-      id="input-roomcode"
-      placeholder="Paste room code here"
-      inputmode="text"
-      autocomplete="off"
-      spellcheck="false"
-    />
-    <button id="btn-join">Connect →</button>
+    <h1>Scan to connect</h1>
+    <p>Scan this QR code with your phone to link this screen to your playlist.</p>
+    <div id="pairing-qr" class="pairing-qr"></div>
+    <p class="pairing-waiting">
+      <span class="pairing-dot"></span>
+      Waiting for controller…
+    </p>
   </div>
 </div>
 

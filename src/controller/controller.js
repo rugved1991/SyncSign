@@ -433,7 +433,7 @@ function openPreview() {
 
 function renderPreviewSlide() {
   const item = playlist[previewIndex]
-  document.getElementById('preview-img').src = item.thumbnailUrl || item.url
+  document.getElementById('preview-img').src = item.url
   document.getElementById('preview-counter').textContent = `${previewIndex + 1} / ${playlist.length}`
 
   const hasOverlay = item.title || item.description || item.price

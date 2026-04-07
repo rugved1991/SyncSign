@@ -151,7 +151,7 @@ async function loadMainScreen() {
   // Load existing images from Drive
   try {
     const images = await listDriveImages(getStoredFolderId())
-    playlist = images.map(img => ({ id: img.id, url: img.url }))
+    playlist = images.map(img => ({ id: img.id, url: img.url, thumbnailUrl: img.thumbnailUrl || img.url }))
     renderPlaylist()
   } catch (err) {
     console.warn('Could not load Drive images:', err)
@@ -181,7 +181,7 @@ function renderPlaylist() {
     el.className = 'playlist-item'
     el.dataset.index = i
     el.innerHTML = `
-      <img src="${item.url}" alt="${item.title || 'Slide ' + (i + 1)}" loading="lazy" />
+      <img src="${item.thumbnailUrl || item.url}" alt="${item.title || 'Slide ' + (i + 1)}" loading="lazy" />
       <span class="playlist-item-index">${i + 1}</span>
     `
 
@@ -270,7 +270,7 @@ document.getElementById('file-input').addEventListener('change', async (e) => {
   let added = 0
   results.forEach((r) => {
     if (r.status === 'fulfilled') {
-      playlist.push({ id: r.value.id, url: r.value.url })
+      playlist.push({ id: r.value.id, url: r.value.url, thumbnailUrl: r.value.thumbnailUrl || r.value.url })
       added++
     } else {
       console.error('Upload error:', r.reason)
@@ -321,7 +321,7 @@ function closeUrlModal() {
 function openSlideModal(index) {
   editingSlideIndex = index
   const item = playlist[index]
-  document.getElementById('modal-slide-img').src = item.url
+  document.getElementById('modal-slide-img').src = item.thumbnailUrl || item.url
   document.getElementById('slide-title').value = item.title || ''
   document.getElementById('slide-description').value = item.description || ''
   document.getElementById('slide-price').value = item.price || ''
@@ -433,7 +433,7 @@ function openPreview() {
 
 function renderPreviewSlide() {
   const item = playlist[previewIndex]
-  document.getElementById('preview-img').src = item.url
+  document.getElementById('preview-img').src = item.thumbnailUrl || item.url
   document.getElementById('preview-counter').textContent = `${previewIndex + 1} / ${playlist.length}`
 
   const hasOverlay = item.title || item.description || item.price

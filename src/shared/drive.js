@@ -67,7 +67,7 @@ export async function uploadImageToDrive(file, folderId) {
   form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }))
   form.append('file', file)
 
-  const res = await fetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name`, {
+  const res = await fetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name,thumbnailLink`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: form,
@@ -82,6 +82,7 @@ export async function uploadImageToDrive(file, folderId) {
     id: data.id,
     name: data.name,
     url: driveImageUrl(data.id),
+    thumbnailUrl: data.thumbnailLink || driveImageUrl(data.id),
   }
 }
 
@@ -110,7 +111,7 @@ export async function listDriveImages(folderId) {
     `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`
   )
   const res = await fetch(
-    `${DRIVE_API}/files?q=${q}&fields=files(id,name)&orderBy=createdTime desc`,
+    `${DRIVE_API}/files?q=${q}&fields=files(id,name,thumbnailLink)&orderBy=createdTime desc`,
     { headers: { Authorization: `Bearer ${token}` } }
   )
   if (!res.ok) throw new Error(`Drive list failed: ${res.status}`)
@@ -119,6 +120,7 @@ export async function listDriveImages(folderId) {
     id: f.id,
     name: f.name,
     url: driveImageUrl(f.id),
+    thumbnailUrl: f.thumbnailLink || driveImageUrl(f.id),
   }))
 }
 
@@ -138,7 +140,9 @@ export async function deleteDriveFile(fileId) {
  * Public URL for a Drive image — used by TVs to fetch without auth.
  */
 export function driveImageUrl(fileId) {
-  return `https://drive.google.com/uc?export=view&id=${fileId}`
+  // lh3 is Google's image CDN — publicly accessible for files with 'anyone reader'
+  // permission, and not subject to the deprecation of the /uc?export=view endpoint.
+  return `https://lh3.googleusercontent.com/d/${fileId}`
 }
 
 /**

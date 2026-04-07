@@ -1,0 +1,10 @@
+{
+  "rules": {
+    "rooms": {
+      "$uid": {
+        ".read": true,
+        ".write": "auth.uid === $uid"
+      }
+    }
+  }
+}

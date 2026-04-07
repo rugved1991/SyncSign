@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SyncSign Display</title>
+  <link rel="stylesheet" href="./display.css" />
+  <meta name="theme-color" content="#000000" />
+</head>
+<body>
+
+<!-- ── Room code entry ────────────────────────────────────────────── -->
+<div id="screen-roomcode" class="screen hidden">
+  <div class="roomcode-card">
+    <div class="logo">
+      <span class="logo-icon">◈</span>
+      <span>SyncSign</span>
+    </div>
+    <h1>Enter your room code</h1>
+    <p>Ask your manager for the room code, or scan the QR code from the controller app.</p>
+    <input
+      type="text"
+      id="input-roomcode"
+      placeholder="Paste room code here"
+      inputmode="text"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <button id="btn-join">Connect →</button>
+  </div>
+</div>
+
+<!-- ── Fullscreen prompt ──────────────────────────────────────────── -->
+<div id="screen-fullscreen" class="screen hidden">
+  <div class="fs-prompt">
+    <div class="logo">
+      <span class="logo-icon">◈</span>
+      <span>SyncSign</span>
+    </div>
+    <p>Tap anywhere to start fullscreen</p>
+  </div>
+</div>
+
+<!-- ── Loading ────────────────────────────────────────────────────── -->
+<div id="screen-loading" class="screen hidden">
+  <div class="loading-spinner"></div>
+</div>
+
+<!-- ── Slideshow ──────────────────────────────────────────────────── -->
+<div id="screen-display" class="screen hidden">
+  <!-- Two absolutely-positioned images for cross-fade -->
+  <img id="slide-a" class="slide-img" src="" alt="" />
+  <img id="slide-b" class="slide-img hidden" src="" alt="" />
+
+  <!-- Metadata overlay -->
+  <div id="overlay" class="overlay hidden">
+    <div class="overlay-content">
+      <div id="overlay-title" class="overlay-title"></div>
+      <div id="overlay-description" class="overlay-description"></div>
+      <div id="overlay-price" class="overlay-price"></div>
+    </div>
+  </div>
+
+  <!-- Progress bar -->
+  <div id="progress-bar" class="progress-bar"></div>
+
+  <!-- Connection status dot -->
+  <div id="status-dot" class="status-dot offline"></div>
+</div>
+
+<script type="module" src="./display.js"></script>
+</body>
+</html>

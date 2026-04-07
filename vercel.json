@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/controller", "destination": "/src/controller/index.html" },
+    { "source": "/controller/(.*)", "destination": "/src/controller/index.html" },
+    { "source": "/display", "destination": "/src/display/index.html" },
+    { "source": "/display/(.*)", "destination": "/src/display/index.html" }
+  ]
+}

@@ -140,3 +140,41 @@ export async function deleteDriveFile(fileId) {
 export function driveImageUrl(fileId) {
   return `https://drive.google.com/uc?export=view&id=${fileId}`
 }
+
+/**
+ * Parse a folder ID from a Google Drive folder URL or raw ID.
+ * Handles:
+ *   https://drive.google.com/drive/folders/FOLDER_ID
+ *   https://drive.google.com/drive/u/0/folders/FOLDER_ID
+ *   FOLDER_ID (raw)
+ */
+export function parseFolderIdFromUrl(input) {
+  const trimmed = input.trim()
+  const match = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/)
+  return match ? match[1] : trimmed
+}
+
+/**
+ * Validate that a folder ID exists and is accessible.
+ * Returns { id, name } on success, throws on failure.
+ * Requires drive.readonly scope if the folder was not created by this app.
+ */
+export async function validateFolder(folderId) {
+  const token = getToken()
+  const res = await fetch(
+    `${DRIVE_API}/files/${folderId}?fields=id,name,mimeType`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  if (!res.ok) throw new Error('Folder not found or not accessible')
+  const data = await res.json()
+  if (data.mimeType !== 'application/vnd.google-apps.folder') throw new Error('That link is not a folder')
+  return data
+}
+
+/**
+ * Store an externally-selected folder (not created by this app).
+ */
+export function storeExistingFolder(folderId, folderName) {
+  localStorage.setItem(FOLDER_KEY, folderId)
+  localStorage.setItem(RESTAURANT_KEY, folderName)
+}

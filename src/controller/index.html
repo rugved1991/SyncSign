@@ -41,12 +41,29 @@
       <span class="logo-icon">◈</span>
       <span class="logo-text">SyncSign</span>
     </div>
-    <h2>What's your restaurant called?</h2>
-    <p class="setup-subtitle">We'll create a folder in your Google Drive to store your signage images.</p>
-    <div class="input-group">
-      <input type="text" id="input-restaurant-name" placeholder="e.g. Mario's Pizzeria" autocomplete="organization" />
+
+    <!-- Path A: create new folder -->
+    <div id="setup-new" class="setup-section">
+      <h2>What's your restaurant called?</h2>
+      <p class="setup-subtitle">We'll create a folder in your Google Drive to store your signage images.</p>
+      <div class="input-group">
+        <input type="text" id="input-restaurant-name" placeholder="e.g. Mario's Pizzeria" autocomplete="organization" />
+      </div>
+      <button id="btn-setup" class="btn-primary">Create folder →</button>
     </div>
-    <button id="btn-setup" class="btn-primary">Get started →</button>
+
+    <div class="setup-divider"><span>or</span></div>
+
+    <!-- Path B: use existing folder -->
+    <div id="setup-existing" class="setup-section">
+      <h2>Use an existing Drive folder</h2>
+      <p class="setup-subtitle">Open the folder in Google Drive, copy the link from the address bar, and paste it below.</p>
+      <div class="input-group">
+        <input type="url" id="input-folder-url" placeholder="https://drive.google.com/drive/folders/…" />
+      </div>
+      <button id="btn-use-existing" class="btn-secondary">Use this folder →</button>
+    </div>
+
     <p id="setup-error" class="error-text hidden"></p>
   </div>
 </div>
@@ -102,7 +119,7 @@
         <small>Any public image link</small>
       </button>
     </div>
-    <input type="file" id="file-input" accept="image/*" class="hidden" />
+    <input type="file" id="file-input" accept="image/*" multiple class="hidden" />
   </section>
 
   <!-- Controls -->

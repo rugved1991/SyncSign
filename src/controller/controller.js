@@ -1,4 +1,4 @@
-import { signIn, getStoredSession } from '@shared/auth.js'
+import { signIn, getStoredSession, requestAdditionalScope } from '@shared/auth.js'
 import {
   firebaseSignInWithGoogle,
   pushRoomState,
@@ -12,6 +12,9 @@ import {
   uploadImageToDrive,
   listDriveImages,
   deleteDriveFile,
+  parseFolderIdFromUrl,
+  validateFolder,
+  storeExistingFolder,
 } from '@shared/drive.js'
 import { broadcastState } from '@shared/broadcast.js'
 import { ref as dbRef, onDisconnect } from 'firebase/database'
@@ -94,6 +97,41 @@ document.getElementById('btn-setup').addEventListener('click', async () => {
 
 document.getElementById('input-restaurant-name').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('btn-setup').click()
+})
+
+// ── Use existing Drive folder ─────────────────────────────────────
+document.getElementById('btn-use-existing').addEventListener('click', async () => {
+  const raw = document.getElementById('input-folder-url').value.trim()
+  if (!raw) return
+
+  const btn = document.getElementById('btn-use-existing')
+  const errEl = document.getElementById('setup-error')
+  btn.disabled = true
+  btn.textContent = 'Connecting…'
+  errEl.classList.add('hidden')
+
+  try {
+    const folderId = parseFolderIdFromUrl(raw)
+
+    // Need drive.readonly to access folders not created by this app
+    await requestAdditionalScope('https://www.googleapis.com/auth/drive.readonly')
+
+    const folder = await validateFolder(folderId)
+    storeExistingFolder(folder.id, folder.name)
+    loadMainScreen()
+  } catch (err) {
+    console.error('Existing folder error:', err)
+    errEl.textContent = err.message.includes('not found')
+      ? 'Folder not found. Make sure the link is correct and the folder is not restricted.'
+      : `Could not connect: ${err.message}`
+    errEl.classList.remove('hidden')
+    btn.disabled = false
+    btn.textContent = 'Use this folder →'
+  }
+})
+
+document.getElementById('input-folder-url').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('btn-use-existing').click()
 })
 
 // ── Main screen load ──────────────────────────────────────────────
@@ -218,21 +256,37 @@ document.getElementById('btn-upload').addEventListener('click', () => {
 })
 
 document.getElementById('file-input').addEventListener('change', async (e) => {
-  const file = e.target.files[0]
-  if (!file) return
+  const files = [...e.target.files]
+  if (!files.length) return
   e.target.value = ''
 
   const folderId = getStoredFolderId()
-  showToast('Uploading…')
+  showToast(`Uploading ${files.length} image${files.length > 1 ? 's' : ''}…`)
 
-  try {
-    const result = await uploadImageToDrive(file, folderId)
-    playlist.push({ id: result.id, url: result.url })
-    renderPlaylist()
-    showToast('Image added!')
-  } catch (err) {
-    console.error('Upload error:', err)
-    showToast('Upload failed. Please try again.')
+  const results = await Promise.allSettled(
+    files.map(file => uploadImageToDrive(file, folderId))
+  )
+
+  let added = 0
+  results.forEach((r) => {
+    if (r.status === 'fulfilled') {
+      playlist.push({ id: r.value.id, url: r.value.url })
+      added++
+    } else {
+      console.error('Upload error:', r.reason)
+    }
+  })
+
+  renderPlaylist()
+
+  // Scroll the strip to show the newly added thumbnails
+  const strip = document.getElementById('playlist-strip')
+  strip.scrollTo({ left: strip.scrollWidth, behavior: 'smooth' })
+
+  if (added === files.length) {
+    showToast(`${added} image${added > 1 ? 's' : ''} added!`)
+  } else {
+    showToast(`${added} of ${files.length} uploaded — some failed.`)
   }
 })
 

@@ -16,6 +16,7 @@ const SCOPES = [
 ].join(' ')
 
 let tokenClient = null
+let tokenClientId = null
 
 /**
  * Load the GSI script dynamically.
@@ -38,10 +39,32 @@ function loadGSIScript() {
  * Must be called after GSI script loads.
  */
 function initTokenClient(clientId, callback) {
+  tokenClientId = clientId
   tokenClient = window.google.accounts.oauth2.initTokenClient({
     client_id: clientId,
     scope: SCOPES,
     callback,
+  })
+}
+
+/**
+ * Request an additional OAuth scope incrementally (e.g. drive.readonly).
+ * Call after the initial sign-in. Shows a consent popup only if the scope
+ * hasn't been granted yet.
+ */
+export async function requestAdditionalScope(scope) {
+  await loadGSIScript()
+  return new Promise((resolve, reject) => {
+    const client = window.google.accounts.oauth2.initTokenClient({
+      client_id: tokenClientId,
+      scope,
+      callback: (response) => {
+        if (response.error) return reject(new Error(response.error))
+        sessionStorage.setItem(TOKEN_KEY, response.access_token)
+        resolve(response.access_token)
+      },
+    })
+    client.requestAccessToken({ prompt: '' })
   })
 }
 

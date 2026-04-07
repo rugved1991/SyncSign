@@ -101,8 +101,23 @@ body {
   margin: 0 auto;
   text-align: center;
 }
-.setup-card h2 { font-size: 1.4rem; font-weight: 700; }
+.setup-section { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.setup-section h2 { font-size: 1.2rem; font-weight: 700; }
 .setup-subtitle { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; }
+.setup-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+.setup-divider::before, .setup-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
 .input-group { width: 100%; }
 .input-group input, input[type="text"], input[type="url"] {
   width: 100%;

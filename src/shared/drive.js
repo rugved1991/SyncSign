@@ -19,24 +19,51 @@ function getToken() {
  * Create the SyncSign folder in the owner's Drive.
  * Returns the folder ID.
  */
-export async function createDriveFolder(restaurantName) {
+/**
+ * Find an existing "SyncSign — <name>" folder in Drive, or create it.
+ * Stores the result in localStorage and returns the folder ID.
+ */
+export async function findOrCreateDriveFolder(restaurantName) {
   const token = getToken()
-  const res = await fetch(`${DRIVE_API}/files`, {
+  const folderName = `SyncSign — ${restaurantName}`
+
+  // Search for an existing folder with this exact name (drive.file scope
+  // only returns files created by this app's OAuth client).
+  const q = encodeURIComponent(
+    `mimeType='application/vnd.google-apps.folder' and name='${folderName.replace(/'/g, "\\'")}' and trashed=false`
+  )
+  const searchRes = await fetch(`${DRIVE_API}/files?q=${q}&fields=files(id,name)&pageSize=1`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (searchRes.ok) {
+    const data = await searchRes.json()
+    if (data.files && data.files.length > 0) {
+      const existing = data.files[0]
+      localStorage.setItem(FOLDER_KEY, existing.id)
+      localStorage.setItem(RESTAURANT_KEY, restaurantName)
+      return existing.id
+    }
+  }
+
+  // Not found — create it.
+  const createRes = await fetch(`${DRIVE_API}/files`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      name: `SyncSign — ${restaurantName}`,
-      mimeType: 'application/vnd.google-apps.folder',
-    }),
+    body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder' }),
   })
-  if (!res.ok) throw new Error(`Drive folder creation failed: ${res.status}`)
-  const data = await res.json()
-  localStorage.setItem(FOLDER_KEY, data.id)
+  if (!createRes.ok) throw new Error(`Drive folder creation failed: ${createRes.status}`)
+  const created = await createRes.json()
+  localStorage.setItem(FOLDER_KEY, created.id)
   localStorage.setItem(RESTAURANT_KEY, restaurantName)
-  return data.id
+  return created.id
+}
+
+/** @deprecated Use findOrCreateDriveFolder instead */
+export async function createDriveFolder(restaurantName) {
+  return findOrCreateDriveFolder(restaurantName)
 }
 
 /**
@@ -57,6 +84,7 @@ export function getStoredFolderId() {
 export function getStoredRestaurantName() {
   return localStorage.getItem(RESTAURANT_KEY) || ''
 }
+
 
 /**
  * Upload an image file to the SyncSign Drive folder.

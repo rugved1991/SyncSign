@@ -2,8 +2,14 @@
   "rules": {
     "rooms": {
       "$uid": {
-        ".read": true,
-        ".write": "auth.uid === $uid"
+        "state": {
+          ".read": true,
+          ".write": "auth.uid === $uid"
+        },
+        "presence": {
+          ".read": "auth.uid === $uid",
+          ".write": "auth != null"
+        }
       }
     },
     "pairing": {

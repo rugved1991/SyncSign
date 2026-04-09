@@ -386,13 +386,14 @@ document.getElementById('btn-push').addEventListener('click', async () => {
 
   try {
     broadcastState(state)
+    console.log('[push] auth.currentUser:', auth.currentUser?.uid, '| session.uid:', session.uid)
     await pushRoomState(session.uid, state)
 
     const tvCount = parseInt(document.getElementById('tv-count-num').textContent) || 0
     showToast(`${tvCount} screen${tvCount === 1 ? '' : 's'} updated`)
   } catch (err) {
     console.error('Push failed:', err)
-    showToast('Push failed. Check your connection.')
+    showToast(`Push failed: ${err.code || err.message || 'unknown'}`)
   } finally {
     btn.disabled = false
     btn.textContent = 'Push live'

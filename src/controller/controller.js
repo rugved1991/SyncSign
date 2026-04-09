@@ -11,6 +11,7 @@ import {
   subscribePresenceCount,
   resolvePairing,
   database,
+  auth,
 } from '@shared/firebase.js'
 import {
   createDriveFolder,
@@ -537,7 +538,18 @@ function showToast(msg) {
   const stored = getStoredSession()
   if (stored) {
     session = stored
-    onSignedIn()
+    // auth.currentUser is null synchronously on page load even when Firebase
+    // has a cached credential. Wait for the first auth state event before
+    // deciding whether to proceed or force a re-login.
+    await new Promise(resolve => {
+      const unsub = auth.onAuthStateChanged(() => { unsub(); resolve() })
+    })
+    if (auth.currentUser) {
+      onSignedIn()
+    } else {
+      // Firebase session expired — clear stored session and re-authenticate.
+      showScreen('screen-signin')
+    }
   } else {
     showScreen('screen-signin')
   }

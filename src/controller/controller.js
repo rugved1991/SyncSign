@@ -535,9 +535,10 @@ function showToast(msg) {
     const { accessToken, idToken } = oauthReturn
     try {
       const info = await fetchUserInfo(accessToken)
-      storeSession(info.sub, info.email, info.name || info.email, accessToken)
-      session = { uid: info.sub, email: info.email, name: info.name || info.email }
-      await firebaseSignInWithGoogle(idToken, accessToken)
+      const fbResult = await firebaseSignInWithGoogle(idToken, accessToken)
+      const uid = fbResult.user.uid   // use Firebase UID, not Google sub
+      storeSession(uid, info.email, info.name || info.email, accessToken)
+      session = { uid, email: info.email, name: info.name || info.email }
       onSignedIn()
     } catch (err) {
       console.error('Sign-in completion failed:', err)
@@ -564,6 +565,8 @@ function showToast(msg) {
       const unsub = auth.onAuthStateChanged(() => { unsub(); resolve() })
     })
     if (auth.currentUser) {
+      // Always use Firebase UID (stored.uid may be a stale Google sub from an old session)
+      session.uid = auth.currentUser.uid
       onSignedIn()
     } else {
       // Firebase session expired — clear stored session and re-authenticate.

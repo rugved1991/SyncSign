@@ -140,6 +140,7 @@ export async function listDriveImages(folderId) {
   )
   if (!res.ok) throw new Error(`Drive list failed: ${res.status}`)
   const data = await res.json()
+  console.log('[listDriveImages] raw response:', JSON.stringify(data))
   return (data.files || []).map((f) => ({
     id: f.id,
     name: f.name,

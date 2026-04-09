@@ -22,6 +22,7 @@ import {
   listDriveImages,
   deleteDriveFile,
   openFolderPicker,
+  findDriveFolderByName,
 } from '@shared/drive.js'
 import { broadcastState } from '@shared/broadcast.js'
 import { ref as dbRef, onDisconnect } from 'firebase/database'
@@ -49,13 +50,24 @@ document.getElementById('btn-signin').addEventListener('click', () => {
   initiateOAuthRedirect(import.meta.env.VITE_GOOGLE_CLIENT_ID)
 })
 
-function onSignedIn() {
-  const folderId = getStoredFolderId()
-  if (folderId) {
-    loadMainScreen()
-  } else {
-    showScreen('screen-setup')
+async function onSignedIn() {
+  const storedName = getStoredRestaurantName()
+
+  // Always re-verify the folder ID from Drive on sign-in.
+  // localStorage can hold a stale ID (e.g. deleted folder, new device).
+  if (storedName) {
+    try {
+      const folder = await findDriveFolderByName(storedName)
+      if (folder) {
+        setStoredFolder(folder.id, storedName)
+        loadMainScreen()
+        return
+      }
+    } catch (_) {}
   }
+
+  // No matching folder in Drive — show setup to pick/enter a name.
+  showScreen('screen-setup')
 }
 
 // ── Restaurant setup ──────────────────────────────────────────────

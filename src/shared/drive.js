@@ -85,6 +85,23 @@ export function getStoredRestaurantName() {
   return localStorage.getItem(RESTAURANT_KEY) || ''
 }
 
+/**
+ * Search Drive for an existing "SyncSign — <name>" folder.
+ * Returns { id, name } or null. Does NOT create anything.
+ */
+export async function findDriveFolderByName(restaurantName) {
+  const token = getToken()
+  const folderName = `SyncSign — ${restaurantName}`
+  const q = encodeURIComponent(
+    `mimeType='application/vnd.google-apps.folder' and name='${folderName.replace(/'/g, "\\'")}' and trashed=false`
+  )
+  const res = await fetch(`${DRIVE_API}/files?q=${q}&fields=files(id,name)&pageSize=1`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) return null
+  const data = await res.json()
+  return data.files && data.files.length > 0 ? data.files[0] : null
+}
 
 /**
  * Upload an image file to the SyncSign Drive folder.

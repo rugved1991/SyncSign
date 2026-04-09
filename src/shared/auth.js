@@ -39,12 +39,17 @@ export function initiateOAuthRedirect(clientId) {
   const pendingPair = new URLSearchParams(window.location.search).get('pair')
   if (pendingPair) sessionStorage.setItem('syncsign_pending_pair', pendingPair)
 
+  // Nonce is required when requesting id_token; Firebase uses it to verify the token
+  const nonce = crypto.randomUUID()
+  sessionStorage.setItem('syncsign_oauth_nonce', nonce)
+
   const redirectUri = window.location.origin + '/controller'
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
-    response_type: 'token',
+    response_type: 'token id_token',   // get both — id_token needed for Firebase auth
     scope: SCOPES,
+    nonce,
     include_granted_scopes: 'true',
   })
   window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`
@@ -55,15 +60,19 @@ export function initiateOAuthRedirect(clientId) {
  * access token from the URL hash, cleans the hash, and returns the token.
  * Returns null if this is not an OAuth return.
  */
+/**
+ * Returns { accessToken, idToken } if returning from OAuth redirect, null otherwise.
+ */
 export function checkOAuthReturn() {
   const hash = window.location.hash.slice(1)
   if (!hash) return null
   const params = new URLSearchParams(hash)
   const accessToken = params.get('access_token')
+  const idToken = params.get('id_token')
   if (!accessToken) return null
   // Remove the hash so refresh doesn't re-process it
   window.history.replaceState({}, '', window.location.pathname + window.location.search)
-  return accessToken
+  return { accessToken, idToken }
 }
 
 /**

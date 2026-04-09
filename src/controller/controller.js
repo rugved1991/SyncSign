@@ -510,13 +510,14 @@ function showToast(msg) {
 // ── Boot ──────────────────────────────────────────────────────────
 ;(async function boot() {
   // ── 1. Returning from Google OAuth redirect? ──────────────────────
-  const accessToken = checkOAuthReturn()
-  if (accessToken) {
+  const oauthReturn = checkOAuthReturn()
+  if (oauthReturn) {
+    const { accessToken, idToken } = oauthReturn
     try {
       const info = await fetchUserInfo(accessToken)
       storeSession(info.sub, info.email, info.name || info.email, accessToken)
       session = { uid: info.sub, email: info.email, name: info.name || info.email }
-      try { await firebaseSignInWithGoogle(accessToken) } catch {}
+      await firebaseSignInWithGoogle(idToken, accessToken)
       onSignedIn()
     } catch (err) {
       console.error('Sign-in completion failed:', err)

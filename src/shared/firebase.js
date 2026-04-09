@@ -14,11 +14,13 @@ export const database = getDatabase(app)
 export const auth = getAuth(app)
 
 /**
- * Sign in to Firebase using a Google access token (from OAuth redirect).
- * GoogleAuthProvider.credential(null, accessToken) works without an ID token.
+ * Sign in to Firebase using a Google ID token + access token.
+ * The ID token is required — credential(null, accessToken) silently fails
+ * in many Firebase SDK versions, leaving auth.currentUser null and causing
+ * all RTDB writes to be rejected with permission-denied.
  */
-export async function firebaseSignInWithGoogle(accessToken) {
-  const credential = GoogleAuthProvider.credential(null, accessToken)
+export async function firebaseSignInWithGoogle(idToken, accessToken) {
+  const credential = GoogleAuthProvider.credential(idToken, accessToken)
   return signInWithCredential(auth, credential)
 }
 

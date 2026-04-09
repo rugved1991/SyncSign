@@ -1,3 +1,4 @@
+import { inject } from '@vercel/analytics'
 import {
   firebaseSignInAnonymously,
   subscribeRoomState,
@@ -10,6 +11,9 @@ import {
 import { onBroadcastState } from '@shared/broadcast.js'
 import { scheduleNext } from '@shared/sync.js'
 import { ref as dbRef, onValue } from 'firebase/database'
+
+// Initialize Vercel Web Analytics
+inject()
 
 // ── Parse room ID from URL ────────────────────────────────────────
 const params = new URLSearchParams(window.location.search)

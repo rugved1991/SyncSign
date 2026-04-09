@@ -1,3 +1,4 @@
+import { inject } from '@vercel/analytics'
 import {
   initiateOAuthRedirect,
   checkOAuthReturn,
@@ -26,6 +27,9 @@ import {
 } from '@shared/drive.js'
 import { broadcastState } from '@shared/broadcast.js'
 import { ref as dbRef, onDisconnect } from 'firebase/database'
+
+// Initialize Vercel Web Analytics
+inject()
 
 // ── State ─────────────────────────────────────────────────────────
 let session = null   // { uid, email, name, accessToken }

@@ -131,12 +131,18 @@ async function loadMainScreen() {
   })
 
   // Load existing images from Drive
-  try {
-    const images = await listDriveImages(getStoredFolderId())
-    playlist = images.map(img => ({ id: img.id, url: img.url, thumbnailUrl: img.thumbnailUrl || img.url }))
-    renderPlaylist()
-  } catch (err) {
-    console.warn('Could not load Drive images:', err)
+  const folderId = getStoredFolderId()
+  console.log('[load] folderId:', folderId, '| token in session:', !!sessionStorage.getItem('syncsign_access_token'))
+  if (folderId) {
+    try {
+      const images = await listDriveImages(folderId)
+      console.log('[load] images found:', images.length)
+      playlist = images.map(img => ({ id: img.id, url: img.url, thumbnailUrl: img.thumbnailUrl || img.url }))
+      renderPlaylist()
+    } catch (err) {
+      console.error('Could not load Drive images:', err)
+      showToast(`Could not load images: ${err.message}`)
+    }
   }
 }
 
